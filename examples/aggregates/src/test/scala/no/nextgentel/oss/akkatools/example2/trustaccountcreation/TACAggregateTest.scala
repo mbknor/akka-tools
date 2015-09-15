@@ -6,9 +6,7 @@ import akka.actor.Status.Failure
 import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit.{TestProbe, TestKit}
 import com.typesafe.config.ConfigFactory
-import no.nextgentel.oss.akkatools.example2.emailsystem.DoSendEmailToCustomer
-import no.nextgentel.oss.akkatools.example2.esigningsystem.DoPerformESigning
-import no.nextgentel.oss.akkatools.example2.processing.DoCreateTrustAccount
+import no.nextgentel.oss.akkatools.example2.other.{DoCreateTrustAccount, DoPerformESigning, DoSendEmailToCustomer}
 import no.nextgentel.oss.akkatools.persistence.DurableMessageForwardAndConfirm
 import no.nextgentel.oss.akkatools.testing.AggregateStateGetter
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, Matchers, FunSuiteLike}
@@ -44,7 +42,7 @@ class TACAggregateTest (_system:ActorSystem) extends TestKit(_system) with FunSu
     emailSystem        = TestProbe()
     trustAccountSystem = TestProbe()
     sender             = TestProbe()
-    main = system.actorOf(TACAggregate.props(ourDispatcher.ref.path, DurableMessageForwardAndConfirm(eSigningSystem.ref).path, DurableMessageForwardAndConfirm(emailSystem.ref).path, DurableMessageForwardAndConfirm(trustAccountSystem.ref).path), "TACAggregate-" + id)
+    main = system.actorOf(TACAggregate.props(ourDispatcher.ref.path, DurableMessageForwardAndConfirm(eSigningSystem.ref).path, DurableMessageForwardAndConfirm(emailSystem.ref).path, DurableMessageForwardAndConfirm(trustAccountSystem.ref).path), id)
     stateGetter = AggregateStateGetter[TACState](main)
   }
 
@@ -68,14 +66,14 @@ class TACAggregateTest (_system:ActorSystem) extends TestKit(_system) with FunSu
     sender.expectMsg("ok")
 
     // We must make sure that our e-signing-system has been told that e-signing should start
-    eSigningSystem.expectMsg(DoPerformESigning(info.customerNo))
+    eSigningSystem.expectMsg(DoPerformESigning(id, info.customerNo))
 
     // Fake the completion of the e-signing
     sendDMBlocking(main, ESigningCompletedCmd(id))
     assertState( TACState(PROCESSING, Some(info), None, None) )
 
     // make sure TrustAccountProcessingSystem is told to process it
-    trustAccountSystem.expectMsg(DoCreateTrustAccount(info.customerNo, info.trustAccountType))
+    trustAccountSystem.expectMsg(DoCreateTrustAccount(id, info.customerNo, info.trustAccountType))
 
     // Fake creation of the trustAccount
     val trustAccountId = "TA-1"
@@ -99,14 +97,14 @@ class TACAggregateTest (_system:ActorSystem) extends TestKit(_system) with FunSu
     assertState( TACState(PENDING_E_SIGNING, Some(info), None, None) )
 
     // We must make sure that our e-signing-system has been told that e-signing should start
-    eSigningSystem.expectMsg(DoPerformESigning(info.customerNo))
+    eSigningSystem.expectMsg(DoPerformESigning(id, info.customerNo))
 
     // Fake the completion of the e-signing
     sendDMBlocking(main, ESigningCompletedCmd(id))
     assertState( TACState(PROCESSING, Some(info), None, None) )
 
     // make sure TrustAccountProcessingSystem is told to process it
-    trustAccountSystem.expectMsg(DoCreateTrustAccount(info.customerNo, info.trustAccountType))
+    trustAccountSystem.expectMsg(DoCreateTrustAccount(id, info.customerNo, info.trustAccountType))
 
     // Fake decline of the trustAccount
     val cause = "Not a suitable customer"
@@ -132,7 +130,7 @@ class TACAggregateTest (_system:ActorSystem) extends TestKit(_system) with FunSu
     sender.expectMsg("ok")
 
     // We must make sure that our e-signing-system has been told that e-signing should start
-    eSigningSystem.expectMsg(DoPerformESigning(info.customerNo))
+    eSigningSystem.expectMsg(DoPerformESigning(id, info.customerNo))
 
     // Just to generate an error, we try to create the same TAC again... should fail
     sendDMBlocking(main, CreateNewTACCmd(id, TrustAccountCreationInfo("Another customer", "TX")), sender.ref)
@@ -147,7 +145,7 @@ class TACAggregateTest (_system:ActorSystem) extends TestKit(_system) with FunSu
     assertState( TACState(PROCESSING, Some(info), None, None) )
 
     // make sure TrustAccountProcessingSystem is told to process it
-    trustAccountSystem.expectMsg(DoCreateTrustAccount(info.customerNo, info.trustAccountType))
+    trustAccountSystem.expectMsg(DoCreateTrustAccount(id, info.customerNo, info.trustAccountType))
 
     // Try to complete the e-signing again - should fail
     sendDMBlocking(main, ESigningCompletedCmd(id))

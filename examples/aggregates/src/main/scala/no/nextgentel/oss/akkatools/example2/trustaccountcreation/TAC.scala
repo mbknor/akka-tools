@@ -3,12 +3,9 @@ package no.nextgentel.oss.akkatools.example2.trustaccountcreation
 import java.util.concurrent.TimeUnit
 
 import akka.actor.Status.Failure
-import akka.actor.{Props, ActorPath}
-import no.nextgentel.oss.akkatools.aggregate.{ResultingDurableMessages, ResultingEvent, AggregateCmd, GeneralAggregate}
-import no.nextgentel.oss.akkatools.example2.emailsystem.DoSendEmailToCustomer
-import no.nextgentel.oss.akkatools.example2.esigningsystem.DoPerformESigning
-import no.nextgentel.oss.akkatools.example2.processing.DoCreateTrustAccount
-import no.nextgentel.oss.akkatools.persistence.SendAsDurableMessage
+import akka.actor.{ActorSystem, Props, ActorPath}
+import no.nextgentel.oss.akkatools.aggregate._
+import no.nextgentel.oss.akkatools.example2.other.{DoCreateTrustAccount, DoPerformESigning, DoSendEmailToCustomer}
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -39,8 +36,15 @@ class TACAggregate
   override def generateResultingDurableMessages = {
     case e:RegisteredEvent  =>
       // We must send message to eSigningSystem
-      val msg = DoPerformESigning(e.info.customerNo)
+      val msg = DoPerformESigning(dispatchId, e.info.customerNo)
       ResultingDurableMessages( msg, eSigningSystem)
+
+    case e:ESigningCompletedEvent =>
+      // ESigning is completed, so we should init creation of the TrustAccount
+      val info = state.info.get
+      val msg = DoCreateTrustAccount(dispatchId, info.customerNo, info.trustAccountType)
+      ResultingDurableMessages(msg, trustAccountSystem)
+
 
     case e:DeclinedEvent =>
       // The TrustAccountCreation-process failed - must notify customer
@@ -52,11 +56,6 @@ class TACAggregate
       val msg = DoSendEmailToCustomer(state.info.get.customerNo, s"Your TrustAccount '${e.trustAccountId}' has been created!")
       ResultingDurableMessages(msg, emailSystem)
 
-    case e:ESigningCompletedEvent =>
-      // ESigning is completed, so we should init creation of the TrustAccount
-      val info = state.info.get
-      val msg = DoCreateTrustAccount(info.customerNo, info.trustAccountType)
-      ResultingDurableMessages(msg, trustAccountSystem)
   }
 }
 
@@ -66,4 +65,19 @@ object TACAggregate {
             eSigningSystem:ActorPath,
             emailSystem:ActorPath,
             trustAccountSystem:ActorPath) = Props(new TACAggregate(ourDispatcher, eSigningSystem, emailSystem ,trustAccountSystem))
+}
+
+
+// Setting up the builder we're going to use for our BookingAggregate and view
+class TACAggregateBuilder(actorSystem: ActorSystem) extends GeneralAggregateBuilder[TACEvent, TACState](actorSystem, "tac", Some(TACState.empty())) {
+
+  def config(eSigningSystem:ActorPath,
+             emailSystem:ActorPath,
+             trustAccountSystem:ActorPath): Unit = {
+    withGeneralAggregateProps {
+      ourDispatcher: ActorPath =>
+        TACAggregate.props(ourDispatcher, eSigningSystem, emailSystem, trustAccountSystem)
+    }
+  }
+
 }
