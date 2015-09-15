@@ -73,7 +73,73 @@ class TACAggregateTest (_system:ActorSystem) extends TestKit(_system) with FunSu
 
     // Fake creation of the trustAccount
     val trustAccountId = "TA-1"
-    sendDMBlocking(main, TACCompletedCmd(id, trustAccountId))
+    sendDMBlocking(main, CompletedCmd(id, trustAccountId))
+    assertState( TACState(CREATED, Some(info), Some(trustAccountId), None) )
+
+    // make sure the customer is emailed
+    emailSystem.expectMsg(DoSendEmailToCustomer(info.customerNo, s"Your TrustAccount '$trustAccountId' has been created!"))
+
+  }
+
+  test("declined") {
+
+    // Make sure we start with empty state
+    assertState(TACState.empty())
+
+    val info = TrustAccountCreationInfo("Customer-1", "type-X")
+
+    // start the trustAccountCreation-process
+    sendDMBlocking(main, CreateNewTACCmd(id, info))
+    assertState( TACState(PENDING_E_SIGNING, Some(info), None, None) )
+
+    // We must make sure that our e-signing-system has been told that e-signing should start
+    eSigningSystem.expectMsg(DoPerformESigning(info.customerNo))
+
+    // Fake the completion of the e-signing
+    sendDMBlocking(main, ESigningCompletedCmd(id))
+    assertState( TACState(PROCESSING, Some(info), None, None) )
+
+    // make sure TrustAccountProcessingSystem is told to process it
+    trustAccountSystem.expectMsg(DoCreateTrustAccount(info.customerNo, info.trustAccountType))
+
+    // Fake decline of the trustAccount
+    val cause = "Not a suitable customer"
+    sendDMBlocking(main, DeclinedCmd(id, cause))
+
+    // make sure the customer is emailed
+    emailSystem.expectMsg(DoSendEmailToCustomer(info.customerNo, s"Sorry.. TAC-failed: $cause"))
+
+  }
+
+  test("Normal flow - with some invalid cmds") {
+
+    // Make sure we start with empty state
+    assertState(TACState.empty())
+
+    val info = TrustAccountCreationInfo("Customer-1", "type-X")
+
+    // start the trustAccountCreation-process
+    sendDMBlocking(main, CreateNewTACCmd(id, info))
+    assertState( TACState(PENDING_E_SIGNING, Some(info), None, None) )
+
+    // We must make sure that our e-signing-system has been told that e-signing should start
+    eSigningSystem.expectMsg(DoPerformESigning(info.customerNo))
+
+    // Fake the completion of the e-signing
+    sendDMBlocking(main, ESigningCompletedCmd(id))
+    assertState( TACState(PROCESSING, Some(info), None, None) )
+
+    // make sure TrustAccountProcessingSystem is told to process it
+    trustAccountSystem.expectMsg(DoCreateTrustAccount(info.customerNo, info.trustAccountType))
+
+    // Try to complete the e-signing again - should fail
+    sendDMBlocking(main, ESigningCompletedCmd(id))
+    // Make sure we have the same state as before
+    assertState( TACState(PROCESSING, Some(info), None, None) )
+
+    // Fake creation of the trustAccount
+    val trustAccountId = "TA-1"
+    sendDMBlocking(main, CompletedCmd(id, trustAccountId))
     assertState( TACState(CREATED, Some(info), Some(trustAccountId), None) )
 
     // make sure the customer is emailed

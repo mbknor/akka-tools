@@ -27,8 +27,8 @@ class TACAggregate
     case c:CreateNewTACCmd        => new ResultingEvent( List(RegisteredEvent(c.info), ESigningStartedEvent()) )
     case c:ESigningFailedCmd      => ResultingEvent( ESigningFailedEvent() )
     case c:ESigningCompletedCmd   => ResultingEvent( ESigningCompletedEvent() )
-    case c:TACCompletedCmd        => ResultingEvent( CreatedEvent(c.trustAccountId) )
-    case c:TACDeclined            => ResultingEvent( DeclinedEvent(c.cause) )
+    case c:CompletedCmd           => ResultingEvent( CreatedEvent(c.trustAccountId) )
+    case c:DeclinedCmd            => ResultingEvent( DeclinedEvent(c.cause) )
   }
 
   override def generateResultingDurableMessages = {
