@@ -2,6 +2,7 @@ package no.nextgentel.oss.akkatools.example2.trustaccountcreation
 
 import java.util.concurrent.TimeUnit
 
+import akka.actor.Status.Failure
 import akka.actor.{Props, ActorPath}
 import no.nextgentel.oss.akkatools.aggregate.{ResultingDurableMessages, ResultingEvent, AggregateCmd, GeneralAggregate}
 import no.nextgentel.oss.akkatools.example2.emailsystem.DoSendEmailToCustomer
@@ -24,7 +25,11 @@ class TACAggregate
 
   // transform command to event
   override def cmdToEvent = {
-    case c:CreateNewTACCmd        => new ResultingEvent( List(RegisteredEvent(c.info), ESigningStartedEvent()) )
+    case c:CreateNewTACCmd        =>
+      ResultingEvent( RegisteredEvent(c.info) )
+        .withSuccessHandler{ () => sender() ! "ok" }
+        .withErrorHandler{   (e) => sender() ! Failure(new Exception(s"Failed: $e"))}
+
     case c:ESigningFailedCmd      => ResultingEvent( ESigningFailedEvent() )
     case c:ESigningCompletedCmd   => ResultingEvent( ESigningCompletedEvent() )
     case c:CompletedCmd           => ResultingEvent( CreatedEvent(c.trustAccountId) )
@@ -32,9 +37,9 @@ class TACAggregate
   }
 
   override def generateResultingDurableMessages = {
-    case e:ESigningStartedEvent  =>
+    case e:RegisteredEvent  =>
       // We must send message to eSigningSystem
-      val msg = DoPerformESigning(state.info.get.customerNo)
+      val msg = DoPerformESigning(e.info.customerNo)
       ResultingDurableMessages( msg, eSigningSystem)
 
     case e:DeclinedEvent =>

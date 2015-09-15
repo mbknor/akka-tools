@@ -12,7 +12,6 @@ class TACStateTest extends FunSuite with Matchers {
     val info = TrustAccountCreationInfo("Customer-1", "type-X")
 
     s = s.transition( RegisteredEvent(info) )
-    s = s.transition( ESigningStartedEvent() )
     s = s.transition( ESigningCompletedEvent() )
 
     // Make sure we have the correct state..
@@ -29,7 +28,6 @@ class TACStateTest extends FunSuite with Matchers {
     val info = TrustAccountCreationInfo("Customer-1", "type-X")
 
     s = s.transition( RegisteredEvent(info) )
-    s = s.transition( ESigningStartedEvent() )
 
     // We are failing the e-signing
     s = s.transition( ESigningFailedEvent() )
