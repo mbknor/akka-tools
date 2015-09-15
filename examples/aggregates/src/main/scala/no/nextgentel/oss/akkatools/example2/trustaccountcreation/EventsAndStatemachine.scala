@@ -8,14 +8,14 @@ import no.nextgentel.oss.akkatools.aggregate.{AggregateState, AggregateError}
 
 trait TACEvent
 
-case class TrustAccountCreationInfo(customerNo:Int, trustAccountType:String)
+case class TrustAccountCreationInfo(customerNo:String, trustAccountType:String)
 
 case class RegisteredEvent(info:TrustAccountCreationInfo)      extends TACEvent
 case class ESigningStartedEvent()                              extends TACEvent
 case class ESigningFailedEvent()                               extends TACEvent
 case class ESigningCompletedEvent()                            extends TACEvent
-case class Created(trustAccountId:String)                      extends TACEvent
-case class Declined(cause:String)                              extends TACEvent
+case class CreatedEvent(trustAccountId:String)                 extends TACEvent
+case class DeclinedEvent(cause:String)                         extends TACEvent
 
 // Generic TAC-Error
 case class TACError(e: String) extends AggregateError(e)
@@ -51,8 +51,12 @@ case class TACState
       case (REGISTERED,        e:ESigningStartedEvent)   => copy( state = PENDING_E_SIGNING )
       case (PENDING_E_SIGNING, e:ESigningFailedEvent)    => copy( state = DECLINED, declineCause = Some("E-Signing failed") )
       case (PENDING_E_SIGNING, e:ESigningCompletedEvent) => copy( state = PROCESSING )
-      case (PROCESSING,        e:Declined)               => copy( state = DECLINED, declineCause = Some(e.cause) )
-      case (PROCESSING,        e:Created)                => TACState( CREATED, info, Some(e.trustAccountId), None )
+      case (PROCESSING,        e:DeclinedEvent)               => copy( state = DECLINED, declineCause = Some(e.cause) )
+      case (PROCESSING,        e:CreatedEvent)                => TACState( CREATED, info, Some(e.trustAccountId), None )
+
+      case (s, e:AnyRef) =>
+        val eventName = e.getClass.getSimpleName
+        throw new TACError(s"Current state is '$s'. Got invalid event: $eventName")
     }
   }
 }
