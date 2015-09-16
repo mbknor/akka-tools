@@ -22,7 +22,7 @@ case class TACError(e: String) extends AggregateError(e)
 
 object StateName extends Enumeration {
   type StateName = Value
-  val NEW = Value("New")
+  val INITIAL_STATE = Value("INITIAL_STATE")
   val PENDING_E_SIGNING = Value("Pending_E_Signing")
   val PROCESSING = Value("Processing")
   val DECLINED = Value("Declined")
@@ -32,7 +32,7 @@ object StateName extends Enumeration {
 import StateName._
 
 object TACState {
-  def empty() = TACState(NEW, None, None, None)
+  def empty() = TACState(INITIAL_STATE, None, None, None)
 }
 
 case class TACState
@@ -45,12 +45,12 @@ case class TACState
 
   override def transition(event: TACEvent) = {
     (state, event) match {
-      case (NEW,               e:RegisteredEvent)        => TACState(PENDING_E_SIGNING, Some(e.info), None, None)
+      case (INITIAL_STATE,     e:RegisteredEvent)        => TACState(PENDING_E_SIGNING, Some(e.info), None, None)
       case (_,                 e:RegisteredEvent)        => throw TACError("Cannot re-create this TAC") // custom error
       case (PENDING_E_SIGNING, e:ESigningFailedEvent)    => copy( state = DECLINED, declineCause = Some("E-Signing failed") )
       case (PENDING_E_SIGNING, e:ESigningCompletedEvent) => copy( state = PROCESSING )
-      case (PROCESSING,        e:DeclinedEvent)               => copy( state = DECLINED, declineCause = Some(e.cause) )
-      case (PROCESSING,        e:CreatedEvent)                => TACState( CREATED, info, Some(e.trustAccountId), None )
+      case (PROCESSING,        e:DeclinedEvent)          => copy( state = DECLINED, declineCause = Some(e.cause) )
+      case (PROCESSING,        e:CreatedEvent)           => TACState( CREATED, info, Some(e.trustAccountId), None )
 
       case (s, e:AnyRef) =>
         val eventName = e.getClass.getSimpleName

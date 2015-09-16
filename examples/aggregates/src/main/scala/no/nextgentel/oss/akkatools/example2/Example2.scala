@@ -152,32 +152,6 @@ class Example2System(system: ActorSystem) {
   }
 }
 
-class Cinema extends Actor with ActorLogging {
 
-  def receive = {
-    case dm: DurableMessage =>
-      val m = dm.payload
-      log.info(Console.GREEN + s"Cinema: $m" + Console.RESET)
-      dm.confirm(context, self)
-  }
-}
 
-class TicketPrinter extends Actor with ActorLogging {
 
-  var counter = 0
-
-  def receive = {
-    case dm: DurableMessage =>
-      val m = dm.payload
-      counter = counter + 1
-      val willCrash = (counter % 3) != 0
-
-      if ( willCrash)
-        log.warning(Console.RED + s"Failing to print ticket $m" + Console.RESET)
-      else {
-
-        log.info(Console.GREEN + s"Printing ticket: $m" + Console.RESET)
-        dm.confirm(context, self)
-      }
-  }
-}
