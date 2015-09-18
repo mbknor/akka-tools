@@ -3,18 +3,15 @@ package no.nextgentel.oss.akkatools.example2.trustaccountcreation
 import java.util.UUID
 
 import akka.actor.Status.Failure
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.ActorSystem
 import akka.testkit.{TestProbe, TestKit}
 import com.typesafe.config.ConfigFactory
 import no.nextgentel.oss.akkatools.example2.other.{DoCreateTrustAccount, DoPerformESigning, DoSendEmailToCustomer}
-import no.nextgentel.oss.akkatools.persistence.DurableMessageForwardAndConfirm
-import no.nextgentel.oss.akkatools.testing.AggregateStateGetter
+import no.nextgentel.oss.akkatools.testing.AggregateTesting
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, Matchers, FunSuiteLike}
 import org.slf4j.LoggerFactory
-import no.nextgentel.oss.akkatools.testing.DurableMessageTesting._
 import StateName._
 
-import scala.reflect.ClassTag
 
 class TACAggregateTest (_system:ActorSystem) extends TestKit(_system) with FunSuiteLike with Matchers with BeforeAndAfterAll with BeforeAndAfter {
 
@@ -28,17 +25,17 @@ class TACAggregateTest (_system:ActorSystem) extends TestKit(_system) with FunSu
   private def generateId() = UUID.randomUUID().toString
 
 
-  trait TestEnv {
+  trait TestEnv extends AggregateTesting[TACState] {
     val id = generateId()
     val ourDispatcher      = TestProbe()
     val eSigningSystem     = TestProbe()
     val emailSystem        = TestProbe()
     val trustAccountSystem = TestProbe()
     val sender             = TestProbe()
-    val main = system.actorOf(TACAggregate.props(ourDispatcher.ref.path, DurableMessageForwardAndConfirm(eSigningSystem.ref).path, DurableMessageForwardAndConfirm(emailSystem.ref).path, DurableMessageForwardAndConfirm(trustAccountSystem.ref).path), id)
+    val main = system.actorOf(TACAggregate.props(ourDispatcher.ref.path, dmForwardAndConfirm(eSigningSystem.ref).path, dmForwardAndConfirm(emailSystem.ref).path, dmForwardAndConfirm(trustAccountSystem.ref).path), id)
 
-    def assertState[T:ClassTag](correctState:T): Unit = {
-      assert(AggregateStateGetter[T](main).getState() == correctState)
+    def assertState(correctState:TACState): Unit = {
+      assert(correctState == getState())
     }
 
   }
