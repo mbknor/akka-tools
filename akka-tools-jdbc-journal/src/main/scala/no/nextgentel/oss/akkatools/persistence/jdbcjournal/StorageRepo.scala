@@ -94,36 +94,29 @@ class StorageRepoImpl(sql2o: Sql2o, schemaName: Option[String], errorHandler:Jdb
       s"values (:typePath, :id, :sequenceNr,${schemaPrefix}s_journalIndex_seq.nextval, :persistentRepr, :payload_write_only, sysdate)"
 
     // Insert the whole list in one transaction
-    val c = sql2o.beginTransaction()
-    try {
+    val c = sql2o.beginTransaction() //rollback on exception is on
 
-      dtoList.foreach {
-        dto =>
-          val insert = c.createQuery(sql)
-            .addParameter("typePath", dto.processorId.typePath)
-            .addParameter("id", dto.processorId.id)
-            .addParameter("sequenceNr", dto.sequenceNr)
-            .addParameter("persistentRepr", dto.persistentRepr)
-            .addParameter("payload_write_only", dto.payloadWriteOnly)
+    dtoList.foreach {
+      dto =>
+        val insert = c.createQuery(sql)
+          .addParameter("typePath", dto.processorId.typePath)
+          .addParameter("id", dto.processorId.id)
+          .addParameter("sequenceNr", dto.sequenceNr)
+          .addParameter("persistentRepr", dto.persistentRepr)
+          .addParameter("payload_write_only", dto.payloadWriteOnly)
 
-          try {
-            insert.executeUpdate
-          } catch {
-            case e: Sql2oException => {
-              val exception = new Exception("Error updating journal for processorId=" + dto.processorId + " and sequenceNr=" + dto.sequenceNr + ": " + e.getMessage, e)
-              errorHandler.onError(e)
-              throw exception
-            }
+        try {
+          insert.executeUpdate
+        } catch {
+          case e: Sql2oException => {
+            val exception = new Exception("Error updating journal for processorId=" + dto.processorId + " and sequenceNr=" + dto.sequenceNr + ": " + e.getMessage, e)
+            errorHandler.onError(e)
+            throw exception
           }
-      }
-
-      c.commit(true)
-    } catch {
-      case e:Throwable =>
-        c.rollback(true)
-        throw e
+        }
     }
 
+    c.commit(true)
   }
 
   def deleteJournalEntryTo(processorId: ProcessorId, toSequenceNr: Long) {
@@ -187,7 +180,7 @@ class StorageRepoImpl(sql2o: Sql2o, schemaName: Option[String], errorHandler:Jdb
   }
 
   def deleteSnapshot(processorId: String, sequenceNr: Long, timestamp: Long) {
-    val sql = s"delete from ${schemaPrefix}t_snapshot where processorId = :processorId  and sequenceNr = :sequenceNr  and timestamp = :timestamp"
+    val sql = s"delete from ${schemaPrefix}t_snapshot where processorId = :processorId  and sequenceNr = :sequenceNr  and (:timestamp = 0 OR timestamp = :timestamp)"
     sql2o.createQuery(sql).addParameter("processorId", processorId).addParameter("sequenceNr", sequenceNr).addParameter("timestamp", timestamp).executeUpdate
   }
 

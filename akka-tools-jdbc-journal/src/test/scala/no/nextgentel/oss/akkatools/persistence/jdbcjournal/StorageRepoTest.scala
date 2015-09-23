@@ -10,7 +10,7 @@ import org.sql2o.quirks.OracleQuirks
 class StorageRepoTest extends FunSuite with Matchers with BeforeAndAfterAll with BeforeAndAfter{
 
   val log = LoggerFactory.getLogger(getClass)
-  lazy val dataSource = DataSourceUtil.createDataSource("StorageRepoTest", "liquibase.sql")
+  lazy val dataSource = DataSourceUtil.createDataSource("StorageRepoTest", "akka-tools-jdbc-journal-liquibase.sql")
 
   val errorHandler = new JdbcJournalErrorHandler {
     override def onError(e: Exception): Unit = log.error("onError", e)

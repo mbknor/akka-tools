@@ -13,17 +13,19 @@ object DataSourceUtil {
 
 
   def createDataSource(h2DbName:String, pathToLiquibaseFile:String):DataSource = {
-    val dataSource = new JdbcDataSource
-    dataSource.setURL(s"jdbc:h2:mem:$h2DbName;mode=oracle;DB_CLOSE_DELAY=-1")
-    dataSource.setUser("sa")
-    dataSource.setPassword("sa")
+    this.synchronized {
+      val dataSource = new JdbcDataSource
+      dataSource.setURL(s"jdbc:h2:mem:$h2DbName;mode=oracle;DB_CLOSE_DELAY=-1")
+      dataSource.setUser("sa")
+      dataSource.setPassword("sa")
 
-    // We need to grab a connection and not release it to prevent the db from being
-    // released when no connections are active..
-    dataSource.getConnection
+      // We need to grab a connection and not release it to prevent the db from being
+      // released when no connections are active..
+      dataSource.getConnection
 
-    updateDb(dataSource, pathToLiquibaseFile)
-    dataSource
+      updateDb(dataSource, pathToLiquibaseFile)
+      dataSource
+    }
   }
 
 
