@@ -17,9 +17,9 @@ case class DurableMessage
   payload:AnyRef,
   sender:String,
   @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@confirmationRoutingInfo_class")
-  confirmationRoutingInfo:AnyRef) extends JacksonJsonSerializable {
+  confirmationRoutingInfo:AnyRef) extends DurableMessageLike with JacksonJsonSerializable {
 
-  def withNewPayload(newPayload:AnyRef):DurableMessage = copy(payload = newPayload)
+  override def withNewPayload(newPayload:AnyRef):DurableMessage = copy(payload = newPayload)
 
   def confirm(systemOrContext:ActorRefFactory, confirmingActor:ActorRef):Unit = {
     if (sender != null) {

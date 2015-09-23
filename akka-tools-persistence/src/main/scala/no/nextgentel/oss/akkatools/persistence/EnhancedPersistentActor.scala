@@ -6,6 +6,7 @@ import akka.actor._
 import akka.event.Logging.MDC
 import akka.persistence.AtLeastOnceDelivery.UnconfirmedDelivery
 import akka.persistence.{PersistentView, RecoveryCompleted, AtLeastOnceDelivery, PersistentActor}
+import no.nextgentel.oss.akkatools.logging.HasMdcInfo
 
 import scala.concurrent.duration.FiniteDuration
 import scala.reflect._
@@ -432,7 +433,13 @@ trait MdcSupport[E] extends BeforeAndAfterEventAndCommand[E] {
   }
 
   // override this method to extract mdc stuff from event or cmd
-  protected def extractMdc(eventOrCmd:AnyRef): Unit = {}
+  protected def extractMdc(eventOrCmd:AnyRef): Unit = {
+    eventOrCmd match {
+      case m:HasMdcInfo =>
+        log.mdc( log.mdc ++ (m.extractMdcInfo()))
+      case _ => None
+    }
+  }
 
   // nice place to do mdc stuff
   override protected def beforeOnEvent(event: E): Unit = {

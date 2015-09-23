@@ -80,6 +80,16 @@ lazy val testDependencies = Seq(
   "com.typesafe.akka" %% "akka-slf4j" % akkaVersion % "test"
 )
 
+lazy val akkaToolsCamelDependencies = Seq(
+  "com.typesafe.akka" %% "akka-actor" % akkaVersion,
+  "com.typesafe.akka" %% "akka-camel" % akkaVersion,
+  "org.apache.camel" % "camel-core" % "2.15.3",
+  "com.typesafe.akka" %% "akka-testkit" % akkaVersion % "test",
+  "org.apache.activemq" % "activemq-camel" % "5.10.0" % "test"
+  ,"org.apache.activemq" % "apache-activemq" % "5.10.0" % "test" excludeAll(ExclusionRule(organization = "org.apache.camel")) exclude("org.slf4j", "slf4j-log4j12")
+
+)
+
 lazy val exampleAggregatesDependencies = Seq(
   "org.scalatest" % "scalatest_2.11" % "2.2.4" % "test",
   "ch.qos.logback" % "logback-classic" % "1.1.3",
@@ -95,6 +105,7 @@ lazy val root = (project in file("."))
     akkaToolsJsonSerializing,
     akkaToolsJdbcJournal,
     akkaToolsCluster,
+    akkaToolsCamel,
     akkaExampleAggregates)
 
 lazy val akkaToolsCommon = (project in file("akka-tools-common"))
@@ -134,6 +145,13 @@ lazy val akkaToolsCluster = (project in file("akka-tools-cluster"))
   .dependsOn(akkaToolsCommon)
   .settings(commonSettings: _*)
   .settings(libraryDependencies ++= (akkaToolsClusterDependencies))
+  .settings(libraryDependencies ++= (testDependencies))
+
+lazy val akkaToolsCamel = (project in file("akka-tools-camel"))
+  .settings(name := "akka-tools-camel")
+  .dependsOn(akkaToolsCommon)
+  .settings(commonSettings: _*)
+  .settings(libraryDependencies ++= (akkaToolsCamelDependencies))
   .settings(libraryDependencies ++= (testDependencies))
 
 lazy val akkaExampleAggregates = (project in file("examples/aggregates"))
