@@ -5,7 +5,7 @@ NextGenTel - Akka Tools
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/no.nextgentel.oss.akka-tools/akka-tools-parent_2.11/badge.svg)](http://mvnrepository.com/artifact/no.nextgentel.oss.akka-tools/)
 
 
-**This branch is work-in-progress to make it compatible with Akka 2.4 - Not working yet**
+(**This branch is compatible with Akka 2.4**)
 
 
 This project contains various addons to Akka useful when working with:
