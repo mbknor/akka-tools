@@ -128,4 +128,29 @@ class BookingTest(_system:ActorSystem) extends TestKit(_system) with FunSuiteLik
 }
 
 
+// IntelliJ 14.1.4 / Scala-plugin 1.5.4:               All breakpoints work
+// IntelliJ 15 EAP IU-143.869.1 / Scala-plugin 2.0.3:  Breakpoint on PROBLEM-LINE does not work
+class IntelliJBreakpointProblemTest extends FunSuite {
+
+  trait SomeTrait {
+    println("SomeTrait-constructor") // Breakpoint on this line works
+  }
+
+  test("Testing intelliJ Breakpoint problem") {
+
+    println("Before constructing trait")
+
+    new SomeTrait {
+
+      println("custom-constructor") // PROBLEM-LINE: Breakpoint on this line does not work
+
+    }
+
+    println("After")
+
+  }
+
+
+}
+
 
