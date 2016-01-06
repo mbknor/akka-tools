@@ -137,7 +137,15 @@ class JdbcEventsByPersistenceIdActor(live:Boolean, refreshInterval: FiniteDurati
             val persistentRepr = serializer.fromBinary(entry.persistentRepr).asInstanceOf[PersistentRepr]
             nextFromSequenceNr = entry.sequenceNr +1
 
-            EventEnvelope(entry.sequenceNr, persistentRepr.persistenceId, entry.sequenceNr, persistentRepr.payload)
+            // Check if payload/event wants to get the journal timestamp injected
+            val payload = persistentRepr.payload match {
+              case payload:InjectJournalTimestamp =>
+                log.debug(s"Injecting timestamp into event/payload")
+                payload.withInjectedJournalTimestamp(entry.timestamp)
+              case payload:Any => payload
+            }
+
+            EventEnvelope(entry.sequenceNr, persistentRepr.persistenceId, entry.sequenceNr, payload)
 
         }.toVector
 

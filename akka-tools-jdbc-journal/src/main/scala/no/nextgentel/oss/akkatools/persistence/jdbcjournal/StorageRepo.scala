@@ -1,6 +1,6 @@
 package no.nextgentel.oss.akkatools.persistence.jdbcjournal
 
-import java.time.OffsetDateTime
+import java.time.{ZoneId, OffsetDateTime}
 import java.util.Date
 
 import no.nextgentel.oss.akkatools.cluster.ClusterNodeRepo
@@ -9,7 +9,7 @@ import org.sql2o.{Sql2oException, Query, Connection, Sql2o}
 
 import scala.concurrent.duration.FiniteDuration
 
-case class JournalEntryDto(persistenceId: PersistenceId, sequenceNr:Long, persistentRepr:Array[Byte], payloadWriteOnly:String)
+case class JournalEntryDto(persistenceId: PersistenceId, sequenceNr:Long, persistentRepr:Array[Byte], payloadWriteOnly:String, timestamp:OffsetDateTime = null)
 case class SnapshotEntry(persistenceId:String, sequenceNr:Long, timestamp:Long, snapshot:Array[Byte], snapshotClassname:String)
 
 
@@ -59,7 +59,7 @@ class StorageRepoImpl(sql2o: Sql2o, schemaName: Option[String], errorHandler:Jdb
       "journalIndex"
     }
 
-    val sql = s"select * from (select typePath, id, $sequenceNrColumnName, persistentRepr from ${schemaPrefix}t_journal where typePath = :typePath " +
+    val sql = s"select * from (select typePath, id, $sequenceNrColumnName, persistentRepr, updated from ${schemaPrefix}t_journal where typePath = :typePath " +
       (if (persistenceId.isFull) " and id = :id " else "") +
       s" and $sequenceNrColumnName >= :fromSequenceNr and $sequenceNrColumnName <= :toSequenceNr and persistentRepr is not null order by $sequenceNrColumnName) where rownum <= :max"
 
@@ -78,7 +78,8 @@ class StorageRepoImpl(sql2o: Sql2o, schemaName: Option[String], errorHandler:Jdb
               PersistenceId(r.getString("typePath"), r.getString("id")),
               r.getLong(sequenceNrColumnName),
               r.getObject("persistentRepr", classOf[Array[Byte]]),
-              null)
+              null,
+              OffsetDateTime.ofInstant(r.getDate("updated").toInstant, ZoneId.systemDefault()))
         }
       } finally {
         if (conn != null) conn.close()

@@ -32,7 +32,8 @@ class StorageRepoTest extends FunSuite with Matchers with BeforeAndAfterAll with
 
     // Must special-equals it due to the byte-array
     assert(dto1.persistentRepr.deep == read.persistentRepr.deep)
-    assert(dto1.copy(persistentRepr = null, payloadWriteOnly = null) == read.copy(persistentRepr = null))
+    assert(dto1.copy(persistentRepr = null, payloadWriteOnly = null) == read.copy(persistentRepr = null, timestamp = null))
+    assert( read.timestamp != null)
   }
 
   test("journal operations") {
@@ -41,7 +42,7 @@ class StorageRepoTest extends FunSuite with Matchers with BeforeAndAfterAll with
     def fix(dtos:List[JournalEntryDto]):List[JournalEntryDto] = {
       dtos.map {
         d =>
-          d.copy(persistentRepr = null)
+          d.copy(persistentRepr = null, timestamp = null)
       }
     }
 

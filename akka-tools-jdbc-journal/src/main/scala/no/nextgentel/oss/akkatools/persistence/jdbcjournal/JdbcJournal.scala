@@ -344,12 +344,21 @@ class JdbcAsyncWriteJournal extends AsyncWriteJournal with ActorLogging {
               .asInstanceOf[PersistentRepr]
               .update(sequenceNr = entry.sequenceNr)
 
-            val persistentRepr = if (!persistenceIdObject.isFull()) {
+            var persistentRepr = if (!persistenceIdObject.isFull()) {
               // Must create a new modified one..
               val newPayload = JournalEntry(persistenceIdSplitter().split(rawPersistentRepr.persistenceId), rawPersistentRepr.payload.asInstanceOf[AnyRef])
               PersistentRepr(newPayload).update(sequenceNr = rawPersistentRepr.sequenceNr, persistenceId = rawPersistentRepr.persistenceId, sender = rawPersistentRepr.sender)
             } else {
               rawPersistentRepr
+            }
+
+            // Check if payload/event wants to get the journal timestamp injected
+            persistentRepr.payload match {
+              case payload:InjectJournalTimestamp =>
+                log.debug(s"Injecting timestamp into event/payload")
+                val updatedPayload = payload.withInjectedJournalTimestamp(entry.timestamp)
+                persistentRepr = persistentRepr.withPayload(updatedPayload)
+              case (_) =>
             }
 
             try {
