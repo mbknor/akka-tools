@@ -2,6 +2,7 @@ package no.nextgentel.oss.akkatools.persistence.jdbcjournal
 
 import java.util.concurrent.TimeUnit
 
+import akka.NotUsed
 import akka.actor.{ActorLogging, Props, ExtendedActorSystem}
 import akka.persistence.PersistentRepr
 import akka.persistence.query.{EventEnvelope, ReadJournalProvider}
@@ -40,16 +41,16 @@ with akka.persistence.query.javadsl.CurrentEventsByTagQuery {
 
   val scalaJdbcReadJournal = new JdbcReadJournal(system, config)
 
-  override def eventsByPersistenceId(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long): javadsl.Source[EventEnvelope, Unit] =
+  override def eventsByPersistenceId(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long): javadsl.Source[EventEnvelope, NotUsed] =
     scalaJdbcReadJournal.eventsByPersistenceId(persistenceId, fromSequenceNr, toSequenceNr).asJava
 
-  override def currentEventsByPersistenceId(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long): javadsl.Source[EventEnvelope, Unit] =
+  override def currentEventsByPersistenceId(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long): javadsl.Source[EventEnvelope, NotUsed] =
     scalaJdbcReadJournal.currentEventsByPersistenceId(persistenceId, fromSequenceNr, toSequenceNr).asJava
 
-  override def eventsByTag(tag: String, offset: Long): javadsl.Source[EventEnvelope, Unit] =
+  override def eventsByTag(tag: String, offset: Long): javadsl.Source[EventEnvelope, NotUsed] =
     scalaJdbcReadJournal.eventsByTag(tag, offset).asJava
 
-  override def currentEventsByTag(tag: String, offset: Long): javadsl.Source[EventEnvelope, Unit] =
+  override def currentEventsByTag(tag: String, offset: Long): javadsl.Source[EventEnvelope, NotUsed] =
     scalaJdbcReadJournal.currentEventsByTag(tag, offset).asJava
 }
 
@@ -64,14 +65,14 @@ with akka.persistence.query.scaladsl.CurrentEventsByTagQuery {
     FiniteDuration(millis, TimeUnit.MILLISECONDS)
   }
 
-  override def eventsByPersistenceId(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long): Source[EventEnvelope, Unit] = {
+  override def eventsByPersistenceId(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long): Source[EventEnvelope, NotUsed] = {
     val props = Props(new JdbcEventsByPersistenceIdActor(true, refreshInterval, persistenceId, fromSequenceNr, toSequenceNr))
-    Source.actorPublisher[EventEnvelope](props).mapMaterializedValue(_ ⇒ ())
+    Source.actorPublisher[EventEnvelope](props).mapMaterializedValue(_ ⇒ NotUsed)
   }
 
-  override def currentEventsByPersistenceId(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long): Source[EventEnvelope, Unit] = {
+  override def currentEventsByPersistenceId(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long): Source[EventEnvelope, NotUsed] = {
     val props = Props(new JdbcEventsByPersistenceIdActor(false, refreshInterval, persistenceId, fromSequenceNr, toSequenceNr))
-    Source.actorPublisher[EventEnvelope](props).mapMaterializedValue(_ ⇒ ())
+    Source.actorPublisher[EventEnvelope](props).mapMaterializedValue(_ ⇒ NotUsed)
   }
 
   private def generatePersistenceIdForEventByTag(tag:String):String = {
@@ -82,16 +83,16 @@ with akka.persistence.query.scaladsl.CurrentEventsByTagQuery {
   }
 
   // Tag is defined to be the type-part used with persistenceIdSplitter
-  override def eventsByTag(tag: String, offset: Long): Source[EventEnvelope, Unit] = {
+  override def eventsByTag(tag: String, offset: Long): Source[EventEnvelope, NotUsed] = {
     val persistenceId = generatePersistenceIdForEventByTag(tag)
     val props = Props(new JdbcEventsByPersistenceIdActor(true, refreshInterval, persistenceId, offset, Long.MaxValue))
-    Source.actorPublisher[EventEnvelope](props).mapMaterializedValue(_ ⇒ ())
+    Source.actorPublisher[EventEnvelope](props).mapMaterializedValue(_ ⇒ NotUsed)
   }
 
-  override def currentEventsByTag(tag: String, offset: Long): Source[EventEnvelope, Unit] = {
+  override def currentEventsByTag(tag: String, offset: Long): Source[EventEnvelope, NotUsed] = {
     val persistenceId = generatePersistenceIdForEventByTag(tag)
     val props = Props(new JdbcEventsByPersistenceIdActor(false, refreshInterval, persistenceId, offset, Long.MaxValue))
-    Source.actorPublisher[EventEnvelope](props).mapMaterializedValue(_ ⇒ ())
+    Source.actorPublisher[EventEnvelope](props).mapMaterializedValue(_ ⇒ NotUsed)
   }
 }
 

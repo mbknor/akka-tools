@@ -1,6 +1,7 @@
 package no.nextgentel.oss.akkatools.persistence.jdbcjournal
 
 
+import akka.NotUsed
 import akka.actor.{Props, ActorLogging, Actor, ActorSystem}
 import akka.persistence.PersistentActor
 import akka.persistence.query.{EventEnvelope, PersistenceQuery}
@@ -56,7 +57,7 @@ class JdbcReadJournalTest(_system:ActorSystem) extends TestKit(_system) with Fun
     val pa = system.actorOf(Props(new TestPersistentActor(persistenceId)))
     val paOther = system.actorOf(Props(new TestPersistentActor(uniquePersistenceId("pa"))))
 
-    val source: Source[EventEnvelope, Unit] =
+    val source: Source[EventEnvelope, NotUsed] =
       readJournal.eventsByPersistenceId(persistenceId, 0, Long.MaxValue)
 
     val streamResult = TestProbe()
@@ -113,7 +114,7 @@ class JdbcReadJournalTest(_system:ActorSystem) extends TestKit(_system) with Fun
 
     Thread.sleep(halfRefreshIntervalInMills) // Skip to next read cycle
 
-    val source: Source[EventEnvelope, Unit] =
+    val source: Source[EventEnvelope, NotUsed] =
       readJournal.currentEventsByPersistenceId(persistenceId, 0, Long.MaxValue)
 
 
@@ -150,7 +151,7 @@ class JdbcReadJournalTest(_system:ActorSystem) extends TestKit(_system) with Fun
     val pa1 = system.actorOf(Props(new TestPersistentActor(id1)))
     val pa2 = system.actorOf(Props(new TestPersistentActor(id2)))
 
-    val source: Source[EventEnvelope, Unit] =
+    val source: Source[EventEnvelope, NotUsed] =
       readJournal.eventsByTag(tag, 0)
 
     val streamResult = TestProbe()
@@ -222,7 +223,7 @@ class JdbcReadJournalTest(_system:ActorSystem) extends TestKit(_system) with Fun
 
     Thread.sleep(halfRefreshIntervalInMills)
 
-    val source: Source[EventEnvelope, Unit] =
+    val source: Source[EventEnvelope, NotUsed] =
       readJournal.currentEventsByTag(tag, 0)
 
     val streamResult = TestProbe()
