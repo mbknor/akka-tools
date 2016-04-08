@@ -4,13 +4,14 @@ import akka.actor.ActorLogging
 import akka.persistence.{SelectedSnapshot, SnapshotMetadata, SnapshotSelectionCriteria}
 import akka.persistence.snapshot.SnapshotStore
 import akka.serialization.{SerializationExtension, SerializerWithStringManifest}
+import com.typesafe.config.Config
 
 import scala.concurrent.{Future, Promise}
 import scala.util.Try
 
-class JdbcSnapshotStore extends SnapshotStore with ActorLogging {
+class JdbcSnapshotStore(val config:Config) extends SnapshotStore with ActorLogging with JdbcJournalExtractRuntimeData {
 
-  import JdbcJournal._
+  val repo = runtimeData.repo
 
   val serialization = SerializationExtension.get(context.system)
 
@@ -21,7 +22,7 @@ class JdbcSnapshotStore extends SnapshotStore with ActorLogging {
 
     val promise = Promise[Option[SelectedSnapshot]]()
     try {
-      repo().findSnapshotEntry(persistenceId, criteria.maxSequenceNr, criteria.maxTimestamp) match {
+      repo.findSnapshotEntry(persistenceId, criteria.maxSequenceNr, criteria.maxTimestamp) match {
         case None =>
           if (log.isDebugEnabled) {
             log.debug("JdbcSnapshotStore - doLoadAsync: Not found - " + persistenceId + " criteria: " + criteria)
@@ -70,7 +71,7 @@ class JdbcSnapshotStore extends SnapshotStore with ActorLogging {
       }
 
 
-      repo().writeSnapshot(
+      repo.writeSnapshot(
         new SnapshotEntry(
           metadata.persistenceId,
           metadata.sequenceNr,
@@ -98,7 +99,7 @@ class JdbcSnapshotStore extends SnapshotStore with ActorLogging {
         log.debug("JdbcSnapshotStore - doDelete: " + metadata)
       }
 
-      repo().deleteSnapshot(metadata.persistenceId, metadata.sequenceNr, metadata.timestamp)
+      repo.deleteSnapshot(metadata.persistenceId, metadata.sequenceNr, metadata.timestamp)
     })
   }
 
@@ -108,7 +109,7 @@ class JdbcSnapshotStore extends SnapshotStore with ActorLogging {
         log.debug("JdbcSnapshotStore - doDelete: " + persistenceId + " criteria " + criteria)
       }
 
-      repo().deleteSnapshotsMatching(persistenceId, criteria.maxSequenceNr, criteria.maxTimestamp)
+      repo.deleteSnapshotsMatching(persistenceId, criteria.maxSequenceNr, criteria.maxTimestamp)
     })
   }
 }

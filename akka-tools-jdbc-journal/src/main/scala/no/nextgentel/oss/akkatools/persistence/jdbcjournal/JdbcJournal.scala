@@ -15,6 +15,7 @@ import akka.persistence.journal.AsyncWriteJournal
 import akka.persistence.snapshot.SnapshotStore
 import akka.serialization.SerializationExtension
 import akka.serialization.SerializerWithStringManifest
+import com.typesafe.config.Config
 import no.nextgentel.oss.akkatools.cluster.ClusterNodeRepo
 import no.nextgentel.oss.akkatools.serializing.JacksonJsonSerializableButNotDeserializable
 import org.sql2o.Sql2o
@@ -88,7 +89,16 @@ trait JdbcJournalRuntimeDataFactory {
 }
 
 case class JdbcJournalRuntimeData( repo:StorageRepo, clusterNodeRepo:ClusterNodeRepo, persistenceIdSplitter:PersistenceIdSplitter, maxRowsPrRead:Int)
+
+trait JdbcJournalExtractRuntimeData {
+
+  val config: Config
+
+  val jdbcJournalRuntimeDataFactoryClassName = config.getString("jdbcJournalRuntimeDataFactory")
+  val runtimeData:JdbcJournalRuntimeData = try {
+    val jdbcJournalRuntimeDataFactory = Class.forName(jdbcJournalRuntimeDataFactoryClassName).newInstance().asInstanceOf[JdbcJournalRuntimeDataFactory]
+    jdbcJournalRuntimeDataFactory.createJdbcJournalRuntimeData()
+  } catch {
+    case e:Exception => throw new Exception(s"Failed to get JdbcJournalRuntimeData from jdbcJournalRuntimeDataFactory '$jdbcJournalRuntimeDataFactoryClassName'", e)
+  }
 }
-
-
-

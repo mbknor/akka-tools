@@ -25,18 +25,17 @@ class JdbcReadJournalTest(_system:ActorSystem) extends TestKit(_system) with Fun
     override def onError(e: Exception): Unit = log.error("JdbcJournalErrorHandler.onError", e)
   }
 
+  trait TestEnv {
 
-  val readJournal = PersistenceQuery(system).readJournalFor[JdbcReadJournal](JdbcReadJournal.identifier)
+    def identifier:String
 
-  val halfRefreshIntervalInMills:Long = readJournal.refreshInterval.toMillis/2
+    SingletonJdbcJournalRuntimeDataFactory.init(JdbcJournalConfig(DataSourceUtil.createDataSource("JdbcReadJournalTest"), None, errorHandler, new PersistenceIdSplitterLastSomethingImpl('-')))
+    val readJournal = PersistenceQuery(system).readJournalFor[JdbcReadJournal](identifier)
 
-  var nextIdValue = System.currentTimeMillis()
-
-  before {
-    // Remember: Since JdbcJournal.init() is static this will break if we run tests in parallel
-    JdbcJournal.init(JdbcJournalConfig(DataSourceUtil.createDataSource("JdbcReadJournalTest"), None, errorHandler, new PersistenceIdSplitterLastSomethingImpl('-')))
+    val halfRefreshIntervalInMills: Long = readJournal.refreshInterval.toMillis / 2
   }
 
+  var nextIdValue = System.currentTimeMillis()
 
   override protected def afterAll(): Unit = {
     val f = system.terminate()
@@ -51,204 +50,217 @@ class JdbcReadJournalTest(_system:ActorSystem) extends TestKit(_system) with Fun
 
   test("EventsByPersistenceIdQuery") {
 
-    val persistenceId = uniquePersistenceId("pa")
-    val pa = system.actorOf(Props(new TestPersistentActor(persistenceId)))
-    val paOther = system.actorOf(Props(new TestPersistentActor(uniquePersistenceId("pa"))))
+    new TestEnv {
 
-    val source: Source[EventEnvelope, Unit] =
-      readJournal.eventsByPersistenceId(persistenceId, 0, Long.MaxValue)
+      def identifier = JdbcReadJournal.identifier
 
-    val streamResult = TestProbe()
+      val persistenceId = uniquePersistenceId("pa")
+      val pa = system.actorOf(Props(new TestPersistentActor(persistenceId)))
+      val paOther = system.actorOf(Props(new TestPersistentActor(uniquePersistenceId("pa"))))
 
-    // materialize stream, consuming events
-    implicit val mat = ActorMaterializer()
-    source.runForeach {
-      event =>
-        println("Stream received Event: " + event)
-        streamResult.ref ! event
+      val source: Source[EventEnvelope, Unit] =
+        readJournal.eventsByPersistenceId(persistenceId, 0, Long.MaxValue)
+
+      val streamResult = TestProbe()
+
+      // materialize stream, consuming events
+      implicit val mat = ActorMaterializer()
+      source.runForeach {
+        event =>
+          println("Stream received Event: " + event)
+          streamResult.ref ! event
+      }
+
+      Thread.sleep(halfRefreshIntervalInMills)
+
+      pa ! TestCmd("a")
+      paOther ! TestCmd("other-a")
+
+      Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
+
+      streamResult.expectMsgAllOf(
+        EventEnvelope(1, persistenceId, 1, TestEvent("a")))
+
+      pa ! TestCmd("b")
+      paOther ! TestCmd("other-b")
+      pa ! TestCmd("c")
+      paOther ! TestCmd("other-c")
+
+
+      Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
+
+      streamResult.expectMsgAllOf(
+        EventEnvelope(2, persistenceId, 2, TestEvent("b")),
+        EventEnvelope(3, persistenceId, 3, TestEvent("c")))
+
+      pa ! TestCmd("d")
+
+      Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
+      streamResult.expectMsgAllOf(
+        EventEnvelope(4, persistenceId, 4, TestEvent("d")))
     }
-
-    Thread.sleep(halfRefreshIntervalInMills)
-
-    pa ! TestCmd("a")
-    paOther ! TestCmd("other-a")
-
-    Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
-
-    streamResult.expectMsgAllOf(
-      EventEnvelope(1, persistenceId, 1, TestEvent("a")))
-
-    pa ! TestCmd("b")
-    paOther ! TestCmd("other-b")
-    pa ! TestCmd("c")
-    paOther ! TestCmd("other-c")
-
-
-    Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
-
-    streamResult.expectMsgAllOf(
-      EventEnvelope(2, persistenceId, 2, TestEvent("b")),
-      EventEnvelope(3, persistenceId, 3, TestEvent("c")))
-
-    pa ! TestCmd("d")
-
-    Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
-    streamResult.expectMsgAllOf(
-      EventEnvelope(4, persistenceId, 4, TestEvent("d")))
-
   }
 
   test("currentEventsByPersistenceId") {
-    val persistenceId = uniquePersistenceId("pa")
-    val pa = system.actorOf(Props(new TestPersistentActor(persistenceId)))
-    val paOther = system.actorOf(Props(new TestPersistentActor(uniquePersistenceId("pa"))))
+    new TestEnv {
+      def identifier = JdbcReadJournal.identifier+"2"
+      val persistenceId = uniquePersistenceId("pa")
+      val pa = system.actorOf(Props(new TestPersistentActor(persistenceId)))
+      val paOther = system.actorOf(Props(new TestPersistentActor(uniquePersistenceId("pa"))))
 
-    pa ! TestCmd("a")
-    paOther ! TestCmd("other-a")
-    pa ! TestCmd("b")
-    paOther ! TestCmd("other-b")
-    pa ! TestCmd("c")
-    paOther ! TestCmd("other-c")
+      pa ! TestCmd("a")
+      paOther ! TestCmd("other-a")
+      pa ! TestCmd("b")
+      paOther ! TestCmd("other-b")
+      pa ! TestCmd("c")
+      paOther ! TestCmd("other-c")
 
-    Thread.sleep(halfRefreshIntervalInMills) // Skip to next read cycle
+      Thread.sleep(halfRefreshIntervalInMills)
+      // Skip to next read cycle
 
-    val source: Source[EventEnvelope, Unit] =
-      readJournal.currentEventsByPersistenceId(persistenceId, 0, Long.MaxValue)
+      val source: Source[EventEnvelope, Unit] =
+        readJournal.currentEventsByPersistenceId(persistenceId, 0, Long.MaxValue)
 
 
-    val streamResult = TestProbe()
+      val streamResult = TestProbe()
 
-    // materialize stream, consuming events
-    implicit val mat = ActorMaterializer()
-    source.runForeach {
-      event =>
-        println("Stream received Event: " + event)
-        streamResult.ref ! event
+      // materialize stream, consuming events
+      implicit val mat = ActorMaterializer()
+      source.runForeach {
+        event =>
+          println("Stream received Event: " + event)
+          streamResult.ref ! event
+      }
+
+      Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
+
+      streamResult.expectMsgAllOf(
+        EventEnvelope(1, persistenceId, 1, TestEvent("a")),
+        EventEnvelope(2, persistenceId, 2, TestEvent("b")),
+        EventEnvelope(3, persistenceId, 3, TestEvent("c")))
+
+      pa ! TestCmd("x")
+      paOther ! TestCmd("other-x")
+
+      Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
+
+      streamResult.expectNoMsg() // The stream should have stopped
     }
-
-    Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
-
-    streamResult.expectMsgAllOf(
-      EventEnvelope(1, persistenceId, 1, TestEvent("a")),
-      EventEnvelope(2, persistenceId, 2, TestEvent("b")),
-      EventEnvelope(3, persistenceId, 3, TestEvent("c")))
-
-    pa ! TestCmd("x")
-    paOther ! TestCmd("other-x")
-
-    Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
-
-    streamResult.expectNoMsg() // The stream should have stopped
-
   }
 
   test("eventsByTag") {
-    val tag = "pb"
-    val id1 = uniquePersistenceId(tag)
-    val id2 = uniquePersistenceId(tag)
-    val pa1 = system.actorOf(Props(new TestPersistentActor(id1)))
-    val pa2 = system.actorOf(Props(new TestPersistentActor(id2)))
+    new TestEnv {
+      def identifier = JdbcReadJournal.identifier+"3"
+      val tag = "pb"
+      val id1 = uniquePersistenceId(tag)
+      val id2 = uniquePersistenceId(tag)
+      val pa1 = system.actorOf(Props(new TestPersistentActor(id1)))
+      val pa2 = system.actorOf(Props(new TestPersistentActor(id2)))
 
-    val source: Source[EventEnvelope, Unit] =
-      readJournal.eventsByTag(tag, 0)
+      val source: Source[EventEnvelope, Unit] =
+        readJournal.eventsByTag(tag, 0)
 
-    val streamResult = TestProbe()
+      val streamResult = TestProbe()
 
-    // materialize stream, consuming events
-    implicit val mat = ActorMaterializer()
-    source.runForeach {
-      event =>
-        println("Stream received Event: " + event)
-        streamResult.ref ! event
+      // materialize stream, consuming events
+      implicit val mat = ActorMaterializer()
+      source.runForeach {
+        event =>
+          println("Stream received Event: " + event)
+          streamResult.ref ! event
+      }
+
+      Thread.sleep(halfRefreshIntervalInMills)
+
+      pa1 ! TestCmd("a1")
+      Thread.sleep(100)
+      pa2 ! TestCmd("a2")
+      Thread.sleep(100)
+
+      Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
+
+      streamResult.expectMsgAllOf(
+        EventEnvelope(1, id1, 1, TestEvent("a1")),
+        EventEnvelope(2, id2, 2, TestEvent("a2")))
+
+      pa1 ! TestCmd("b1")
+      Thread.sleep(100)
+      pa2 ! TestCmd("b2")
+      Thread.sleep(100)
+      pa1 ! TestCmd("c1")
+      Thread.sleep(100)
+      pa2 ! TestCmd("c2")
+
+
+      Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
+
+      streamResult.expectMsgAllOf(
+        EventEnvelope(3, id1, 3, TestEvent("b1")),
+        EventEnvelope(4, id2, 4, TestEvent("b2")),
+        EventEnvelope(5, id1, 5, TestEvent("c1")),
+        EventEnvelope(6, id2, 6, TestEvent("c2")))
+
+      pa1 ! TestCmd("d1")
+      Thread.sleep(100)
+      pa2 ! TestCmd("d2")
+
+      Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
+      streamResult.expectMsgAllOf(
+        EventEnvelope(7, id1, 7, TestEvent("d1")),
+        EventEnvelope(8, id2, 8, TestEvent("d2")))
     }
-
-    Thread.sleep(halfRefreshIntervalInMills)
-
-    pa1 ! TestCmd("a1")
-    Thread.sleep(100)
-    pa2 ! TestCmd("a2")
-    Thread.sleep(100)
-
-    Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
-
-    streamResult.expectMsgAllOf(
-      EventEnvelope(1, id1, 1, TestEvent("a1")),
-      EventEnvelope(2, id2, 2, TestEvent("a2")))
-
-    pa1 ! TestCmd("b1")
-    Thread.sleep(100)
-    pa2 ! TestCmd("b2")
-    Thread.sleep(100)
-    pa1 ! TestCmd("c1")
-    Thread.sleep(100)
-    pa2 ! TestCmd("c2")
-
-
-    Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
-
-    streamResult.expectMsgAllOf(
-      EventEnvelope(3, id1, 3, TestEvent("b1")),
-      EventEnvelope(4, id2, 4, TestEvent("b2")),
-      EventEnvelope(5, id1, 5, TestEvent("c1")),
-      EventEnvelope(6, id2, 6, TestEvent("c2")))
-
-    pa1 ! TestCmd("d1")
-    Thread.sleep(100)
-    pa2 ! TestCmd("d2")
-
-    Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
-    streamResult.expectMsgAllOf(
-      EventEnvelope(7, id1, 7, TestEvent("d1")),
-      EventEnvelope(8, id2, 8, TestEvent("d2")))
   }
 
   test("currentEventsByTag") {
-    val tag = "pc"
-    val id1 = uniquePersistenceId(tag)
-    val id2 = uniquePersistenceId(tag)
-    val pa1 = system.actorOf(Props(new TestPersistentActor(id1)))
-    val pa2 = system.actorOf(Props(new TestPersistentActor(id2)))
+    new TestEnv {
+      def identifier = JdbcReadJournal.identifier+"4"
+      val tag = "pc"
+      val id1 = uniquePersistenceId(tag)
+      val id2 = uniquePersistenceId(tag)
+      val pa1 = system.actorOf(Props(new TestPersistentActor(id1)))
+      val pa2 = system.actorOf(Props(new TestPersistentActor(id2)))
 
-    Thread.sleep(halfRefreshIntervalInMills)
+      Thread.sleep(halfRefreshIntervalInMills)
 
-    pa1 ! TestCmd("a1")
-    Thread.sleep(100)
-    pa2 ! TestCmd("a2")
-    Thread.sleep(100)
-    pa1 ! TestCmd("b1")
-    Thread.sleep(100)
-    pa2 ! TestCmd("b2")
+      pa1 ! TestCmd("a1")
+      Thread.sleep(100)
+      pa2 ! TestCmd("a2")
+      Thread.sleep(100)
+      pa1 ! TestCmd("b1")
+      Thread.sleep(100)
+      pa2 ! TestCmd("b2")
 
-    Thread.sleep(halfRefreshIntervalInMills)
+      Thread.sleep(halfRefreshIntervalInMills)
 
-    val source: Source[EventEnvelope, Unit] =
-      readJournal.currentEventsByTag(tag, 0)
+      val source: Source[EventEnvelope, Unit] =
+        readJournal.currentEventsByTag(tag, 0)
 
-    val streamResult = TestProbe()
+      val streamResult = TestProbe()
 
-    // materialize stream, consuming events
-    implicit val mat = ActorMaterializer()
-    source.runForeach {
-      event =>
-        println("Stream received Event: " + event)
-        streamResult.ref ! event
+      // materialize stream, consuming events
+      implicit val mat = ActorMaterializer()
+      source.runForeach {
+        event =>
+          println("Stream received Event: " + event)
+          streamResult.ref ! event
+      }
+
+      Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
+
+      streamResult.expectMsgAllOf(
+        EventEnvelope(1, id1, 1, TestEvent("a1")),
+        EventEnvelope(2, id2, 2, TestEvent("a2")),
+        EventEnvelope(3, id1, 3, TestEvent("b1")),
+        EventEnvelope(4, id2, 4, TestEvent("b2")))
+
+      pa1 ! TestCmd("c1")
+      Thread.sleep(100)
+      pa2 ! TestCmd("c2")
+
+      Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
+
+      streamResult.expectNoMsg() // The stream should have stopped
     }
-
-    Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
-
-    streamResult.expectMsgAllOf(
-      EventEnvelope(1, id1, 1, TestEvent("a1")),
-      EventEnvelope(2, id2, 2, TestEvent("a2")),
-      EventEnvelope(3, id1, 3, TestEvent("b1")),
-      EventEnvelope(4, id2, 4, TestEvent("b2")))
-
-    pa1 ! TestCmd("c1")
-    Thread.sleep(100)
-    pa2 ! TestCmd("c2")
-
-    Thread.sleep(halfRefreshIntervalInMills * 2) // Skip to next read cycle
-
-    streamResult.expectNoMsg()// The stream should have stopped
   }
 
 }
